@@ -1,118 +1,120 @@
-function [model2,delv] = UpdateMod2D(oper,model,psig,prior,delta_X)
+function model2 = UpdateMod2D(oper,model,psig,prior)
+model.success = 0;
 model2 = model;
 
-if ~strcmp(oper(1:3),'noi') 
+if ~strcmp(oper(1:3),'noi')
     
     v2 = model.v1D;
-    xx2 = model.xx;   
-    zz2 = model.zz;   
-    
-    Nz = length(v2);
-    Nx = length(xx2);
+    xx2 = round(model.xx/prior.delta_X);
+    zz2 = round(model.zz/prior.delta_Z);
+
+    N = length(v2);
     
     if strcmp(oper(1:3),'cha')   %CHANGE V
         %%
-        nind = randi(length(v2));
+        nind = randi(N);        
+        newv = v2(nind) + psig.v1D*randn(1);
         
-        vtmp=[prior.v1D(1); v2; prior.v1D(2)];
-               
-        delv = psig.d1D*randn(1);
-        delv = max([delv vtmp(nind)-vtmp(nind+1)]);
-        delv = min([delv vtmp(nind+2)-vtmp(nind+1)]);
-        
-        v2(nind) = v2(nind) + delv;
-                
-    elseif strcmp(oper,'movez')     %MOVE LAYER (Z)
-        
-        nind = 1 + randi(Nz-2);
-        nindx = randi(Nx);
-        
-        htmp=zz2(:,nindx);
-        
-        delv = psig.h1D*randn(1); %original code
-        delv = max([delv htmp(nind-1) - htmp(nind)]);
-        delv = min([delv htmp(nind+1) - htmp(nind)]);
-        
-        zz2(nind,nindx) = zz2(nind,nindx) + delv * .5 ; %make sure there is no overlap
-
-%%
-    elseif strcmp(oper,'birthz')    %ADD LAYER (Z)
-        
-        nind = 1 + randi(Nz-2);
-        
-        htmp = zz2;
-        vtmp = v2;
-
-        ioldv = nind; 
-
-        delv = abs(psig.v1D*randn(1));        
-        delv = max([delv vtmp(ioldv)-vtmp(ioldv+1)]);
-        delv = min([delv vtmp(ioldv+1)-vtmp(ioldv)]);
-        
-        newv = vtmp(ioldv)+delv; % velocity of the new layer        
-        
-        for ix = 1:Nx % create topography of the new layer
-            junk = rand*(htmp(nind+1,ix)-htmp(nind,ix)) + htmp(nind,ix);
-            junk = max([min(prior.h1D) junk]);
-            junk = min([max(prior.h1D) junk]);
-            newh(1,ix) = junk;
-        end
-
-        if length(v2)<prior.Nlay 
-            zz2 = [zz2; newh];
-            v2 = [v2; newv];
+        if  newv >= min(prior.v1D) && newv <= max(prior.v1D)
+            v2(nind) = newv;
             
-            [~,ih]=sort(sum(zz2,2));
-            zz2=zz2(ih,:);
-            v2=v2(ih);
+            model2.success = 1;
         else
-            delv = 0;
-        end 
-
-        %%
-    elseif strcmp(oper,'deathz')     %REMOVE LAYER (Z)
-        
-        nind = 1 + randi(length(v2)-2);
-        
-        delv = v2(nind-1) - v2(nind);
-        
-        v2(nind)=[];
-        zz2(nind,:)=[];
-      
-%% 
-    elseif strcmp(oper,'movex')     %MOVE HP (X)
-        
-        nindx = 1 + randi(Nx-2); % randomly choose an HP; make sure it is not at the L/R boundaries
-                
-        delv = psig.h1D*randn(1); % how much HP can move
-        
-        if delv>0 && (xx2(nindx+1) - (xx2(nindx) + delv)) > delta_X * prior.smooth_X % make sure not overlap & difference > delta_X (avoid sharp bd)
-             xx2(nindx) = xx2(nindx) + delv;
-        elseif delv<0 && ((xx2(nindx) + delv) - xx2(nindx-1)) > delta_X * prior.smooth_X % make sure not overlap & difference > delta_X
-             xx2(nindx) = xx2(nindx) + delv;
+            return
         end
 
+    elseif strcmp(oper,'swap')       %swap v of 2 cells
+        %%
+        nind1 = randi(N);
+        nind2 = randi(N);
         
+        tmpv = v2(nind1);
+        v2(nind1) = v2(nind2);
+        v2(nind2) = tmpv;
+               
+        model2.success = 1;
+        
+    elseif strcmp(oper,'movez')     %MOVE CELL (X,Z)
+        %%
+        
+        nind = 4 + randi(N-4); %randomly choose a nucleus# > 4 (#1-4 are the 4 corners)
+        
+        delvZ = (psig.z1D*randn(1))/prior.delta_Z; % set a perturbation in vertical (psig.z1D)
+        delvX = (psig.x1D*randn(1))/prior.delta_X; % set a perturbation in horizontal (psig.x1D)        
+        newX = round(xx2(nind) + delvX);
+        newZ = round(zz2(nind) + delvZ);
+        
+        while sum(abs(find(newX == xx2 & newZ == zz2))) ~= 0 %re-propose until no re-occupying
+            delvZ = (psig.z1D*randn(1))/prior.delta_Z; % set a perturbation in vertical (psig.z1D)
+            delvX = (psig.x1D*randn(1))/prior.delta_X; % set a perturbation in horizontal (psig.x1D)
+            newX = round(xx2(nind) + delvX);
+            newZ = round(zz2(nind) + delvZ);
+        end
+        
+        if newZ > min(prior.h1D)/prior.delta_Z && newZ < max(prior.h1D)/prior.delta_Z ...
+                && newX > min(prior.x1D)/prior.delta_X && newX < max(prior.x1D)/prior.delta_X
+            
+            xx2(nind) = newX;
+            zz2(nind) = newZ;
+            
+            model2.success = 1;
+        else
+            return
+        end
+        
+    elseif strcmp(oper,'birthz')    %ADD CELL (X,Z)
+        if N >= prior.Nuclei 
+            return
+        end
+        
+        newv = min(prior.v1D) + rand*range(prior.v1D); %proposed velocity   
+        newX = round((min(prior.x1D) + rand*range(prior.x1D))/prior.delta_X); %proposed x loc
+        newZ = round((min(prior.h1D) + rand*range(prior.h1D))/prior.delta_Z); %proposed z loc
+        
+        while sum(abs(find(newX == xx2 & newZ == zz2))) ~= 0 %re-propose until no re-occupying
+            newX = round((min(prior.x1D) + rand*range(prior.x1D))/prior.delta_X); %proposed x loc
+            newZ = round((min(prior.h1D) + rand*range(prior.h1D))/prior.delta_Z); %proposed z loc
+        end
+        
+        xx2(N+1) = newX;
+        zz2(N+1) = newZ;
+        v2(N+1) = newv;
+        
+        model2.success = 1;
+                       
+        %%
+    elseif strcmp(oper,'deathz')     %REMOVE CELL (X,Z)
+    
+        nind = 4 + randi(N-4); %randomly choose a nucleus# > 4 (#1-4 are the 4 corners)
+        
+        v2(nind) = [];
+        zz2(nind) = [];
+        xx2(nind) = [];
+        
+        model2.success = 1;
+            
+        %%
     else
-        display('Thats not a thing')    
+        disp('Thats not a thing')
     end
-        
+    
     model2.v1D = v2;
-    model2.xx = xx2;
-    model2.zz = zz2;
-        
+    model2.xx = xx2*prior.delta_X;
+    model2.zz = zz2*prior.delta_Z;
+     
 else    %CHANGE NOISE (root mean square error)
-   
+    
     Dsig = model.xsig;
     delv=psig.n*randn(1);
-     
+    
     if Dsig+delv>=prior.n(1) && Dsig+delv<=prior.n(2)
         Dsig2=Dsig+delv;
     else
         Dsig2 = Dsig;
     end
     
-    model2.xsig=Dsig2; 
+    model2.xsig = Dsig2;
+    model2.success = 1;
     
 end
 

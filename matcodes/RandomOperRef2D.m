@@ -1,24 +1,20 @@
-function oper = RandomOperRef2D(hier,Nlay,Ncol,prior)
+function oper = RandomOperRef2D(hier,Nuclei,prior)
 
 
 if hier == 0
     
-    nxt = randi(160);
+    nxt = randi(100);
     
-    if nxt<21 && Nlay<prior.Nlay
+    if nxt<21 && Nuclei<prior.Nuclei
         oper = 'birthz';
-    elseif nxt<41 && Nlay>=4
+    elseif nxt<41 && Nuclei>=4
         oper = 'deathz';
     elseif nxt<61
         oper = 'movez';
-    elseif nxt<101
+    elseif nxt<81
         oper = 'change1D';
-    elseif nxt<121 && Ncol<prior.Ncol
-        oper = 'birthx';
-    elseif nxt<141 && Ncol>=4
-        oper = 'deathx';
-    elseif nxt<161
-        oper = 'movex';
+    elseif nxt<101 
+        oper = 'swap';
     end
     
 elseif hier==1
@@ -26,18 +22,18 @@ elseif hier==1
     
     nxt = randi(120);
     
-    if nxt<21 && Nlay<prior.Nlay
+    if nxt<21 && Nuclei<prior.Nuclei
         oper = 'birthz';
-    elseif nxt<41 && Nlay>=4 % make sure there are at least 4 lyr
+    elseif nxt<41 && Nuclei>5 
         oper = 'deathz';
     elseif nxt<61
         oper = 'movez';
     elseif nxt<81
         oper = 'change1D';
     elseif nxt<101
-        oper = 'movex';
-    elseif nxt<121
         oper = 'noise';
+    elseif nxt<121
+        oper = 'swap';
     end
     
     

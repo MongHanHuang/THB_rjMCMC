@@ -8,7 +8,9 @@ elseif strcmp(oper(1:3),'dea')
     n=3;
 elseif strcmp(oper(1:3),'mov')
     n = 4;
-elseif strcmp(oper,'noise')
+elseif strcmp(oper(1:3),'swa')
     n = 5;
+elseif strcmp(oper,'noise')
+    n = 6;
 end
 
