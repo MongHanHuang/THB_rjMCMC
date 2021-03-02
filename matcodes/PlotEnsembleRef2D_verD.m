@@ -15,7 +15,7 @@
 %          Berit Hudson-Rasmussen (hudsonb@umd.edu)
 % 
 % Date: 11 Oct, 2020
-%        2 Mar, 2021
+%        2 Mar, 2021 (add raypath density, coefficient of variations plots)
 
 %%
 set(0,'defaultaxesfontsize',14)
