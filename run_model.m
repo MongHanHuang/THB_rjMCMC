@@ -15,7 +15,7 @@
 %          Berit Hudson-Rasmussen (hudsonb@umd.edu)
 % 
 % Date: 11 Oct, 2020
-%        2 Mar, 2021 (update input file names enable FMM toolbox by Kroon 2021)
+%        2 Mar, 2021 (update input file names; enable FMM toolbox by Kroon 2021)
 
 %%
 clear
