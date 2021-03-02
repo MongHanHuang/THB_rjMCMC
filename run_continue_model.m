@@ -20,7 +20,7 @@
 clear
 close all
 
-MODEL_FOLDER_NAME = 'StClair_test'; % File Name; it will be under "model" folder
+MODEL_FOLDER_NAME = 'ModelA_test'; % File Name; it will be under "model" folder
 Last_Model_File_Name = 'result';  % output mat file name, saved under the model folder name
 output_name = 'result.1';  % need to update by user
 
