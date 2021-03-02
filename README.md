@@ -7,10 +7,9 @@ Second, the method calculates the posterior probability given estimated travel t
 This tutorial provides an overview of the THB MCMC algorithm, detailed explanation of the model parameters and setup, execution of the program with an example, and figures produced by the program. 
 
 How to cite this program:
+Huang, M.-H., Hudson-Rasmussen, B., Burdick, S., Lekic, V., Nelson, M.D., Fauria, K.E., and Schmerr, N., (2020), Bayesian seismic refraction inversion for critical zone science and near-surface applications, submitted to Geochem. Geophys. Geosys.
 
-
-References
-THB manual
-Bodin
-Burdick and Lekic
-Gabriel Peyre (2020). Toolbox Fast Marching (https://www.mathworks.com/matlabcentral/fileexchange/6110-toolbox-fast-marching), MATLAB Central File Exchange. Retrieved April 4, 2020.
+References:
+Bodin, T., Sambridge, M., Tkalcic, H., Arroucau, P., Gallagher, K., and Rawlinson, N. (2012). Transdimensional inversion of receiver functions and surface wave dispersion, J. Geophys. Res., 117, B02301, doi:10.1029/2011JB008560
+Burdick, S., and Lekic, V. (2017). Velocity variations and uncertainty from transdimensional P-wave tomography of North America, Geophysical Journal International, 209, 1337–1351, https://doi.org/10.1093/gji/ggx091
+Peyre, G. (2020). Toolbox Fast Marching (https://www.mathworks.com/matlabcentral/fileexchange/6110-toolbox-fast-marching), MATLAB Central File Exchange. Retrieved March 31.
