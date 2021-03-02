@@ -49,7 +49,7 @@ Topo = load(elevation_file);
 % Select how 'Filename' & 'Profile number' will be set:
 Fname_Pronum_swtch = 1; % set to '1' to provide "File Name" & "Profile Number" here;
 % Set 'Filename' & 'Profile number':
-MODEL_FOLDER_NAME = 'StClair_test'; % File Name; it will be under "model" folder
+MODEL_FOLDER_NAME = 'ModelA_test'; % File Name; it will be under "model" folder
 OUTPUT_FILE_NAME = 'result';  % output mat file name, saved under the model folder name
 
 %%% Initial model setting %%%
