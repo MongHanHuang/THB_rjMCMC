@@ -15,6 +15,7 @@
 %          Berit Hudson-Rasmussen (hudsonb@umd.edu)
 % 
 % Date: 11 Oct, 2020
+%        2 Mar, 2021 (update input file names)
 
 %%
 clear
@@ -38,8 +39,8 @@ clearvars -except profiles topofiles Npro ipro
 %% Model setup and Priors
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Input files (p-wave arrival times and surface topography)
-input_file = 'data/StClair.mat'; % order in format: arrival time (sec), shot loc (m), receiver loc (m)
-elevation_file = 'data/elevation_StClair.txt'; % order in format: horizontal distance (m), elevation (m)
+input_file = 'data/ModelA.mat'; % order in format: arrival time (sec), shot loc (m), receiver loc (m)
+elevation_file = 'data/elevation_ModelA.txt'; % order in format: horizontal distance (m), elevation (m)
 
 % Load Master data file
 load (input_file);
