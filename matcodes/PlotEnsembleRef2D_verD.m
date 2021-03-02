@@ -15,6 +15,7 @@
 %          Berit Hudson-Rasmussen (hudsonb@umd.edu)
 % 
 % Date: 11 Oct, 2020
+%        2 Mar, 2021
 
 %%
 set(0,'defaultaxesfontsize',14)
@@ -298,15 +299,15 @@ for ishot = 1:Nshot
     hold on;
     
     for i = 1:length(gpath)
-        plot(gpath{i}(2,:)*dX,gpath{i}(1,:)*dX,'k');
+        plot(gpath{i}(2,:)*dX+minX,gpath{i}(1,:)*dX,'k');
         hold on;
         k = k+1;
         [M,~] = size(RayPath);
         N = length(gpath{i});
-        RayPath(M:M+N-1,1) = gpath{i}(2,:);
-        RayPath(M:M+N-1,2) = gpath{i}(1,:);
+        RayPath(M:M+N-1,1) = gpath{i}(2,:)*dX+minX;
+        RayPath(M:M+N-1,2) = gpath{i}(1,:)*dX;
     end
-    % plot(start_point(2),start_point(1),'ro');
+%      plot(start_point(2),start_point(1),'ro');
 end
 plot(Topo(:,1),max(Topo(:,2)) - Topo(:,2),'k','linewidth',2);
 axis image;
@@ -321,8 +322,55 @@ print(H,imfile,'-dpdf','-cmyk');
 imfile = sprintf('%s/Raypath_%s.fig',figfolder,pronum);
 savefig(H,imfile,'compact');
 
-%% find the deepest ray and remove images below it
+%% plot raypath density 
+% [y, x] = size(Wmean);
+% dX = delta_X;
+% dist_threshold = 5;
+% RayDen = zeros(y,x);
+% 
+% for i = 1:y
+%     for j = 1:x
+%         dist = sqrt((RayPath(:,1)-Xg(1,j)).^2 + (RayPath(:,2)-Z(i)).^2);
+%         dist(dist > dist_threshold/dX) = [];
+%         RayDen(i,j) = length(dist);
+%     end
+% end
+% 
+% % figure;imagesc(Xg(1,:)',Z(1,:),RayDen);axis image;
+% 
+% RayDen(RayDen>0) = 1;
+% RayDen(RayDen~=1) = nan;
 
+%% plot raypath density (coarse resolution)
+[y, x] = size(Wmean);
+dX = delta_X;
+dist_threshold = 1;
+ray_threshold = 10;
+RayDen = zeros(y,x);
+
+k = 0;
+for i = 1:4:y
+    for j = 1:4:x
+        k = k+1;
+        dist = sqrt((RayPath(:,1)-Xg(1,j)).^2 + (RayPath(:,2)-Z(i)).^2);
+        dist(dist > dist_threshold/dX) = [];
+        RayDenP(k,1) = Z(1,i);
+        RayDenP(k,2) = Xg(1,j);
+        RayDenP(k,3) = length(dist);
+    end
+end
+
+%figure;scatter(RayDenP(:,2),-RayDenP(:,1),100,RayDenP(:,3),'filled');axis image;
+
+[yyy,xxx] = meshgrid(Xg(1,:),Z);
+RayDen = griddata(RayDenP(:,2),RayDenP(:,1),RayDenP(:,3),yyy,xxx);
+RayDen(RayDen > ray_threshold) = 1;
+RayDen(RayDen~=1) = nan;
+figure;imagesc(Xg(1,:)',Z(1,:),RayDen);axis image;
+
+%% find the deepest ray and remove images below it
+deep_ray = X';
+deep_ray(:,2) = 0;
 [~,id] = sort(RayPath);
 [y, x] = size(Wmean);
 
@@ -331,9 +379,9 @@ mask_dWmean = dWmean;
 mask_std = sqrt(Wvar/cnt);
 
 for i = 1:length(deep_ray)
-    dist = abs(deep_ray(i,1) - RayPath(:,1)*dX);
-    [tmp_dist,~] = find(dist<dX*2);
-    deep_ray(i,2) = max(RayPath(tmp_dist,2))*dX;
+    dist = abs(deep_ray(i,1) - RayPath(:,1));
+    [tmp_dist,~] = find(dist < 1.5*dX);
+    deep_ray(i,2) = max(RayPath(tmp_dist,2));
     for j = 1:y
         if j*dX > deep_ray(i,2)
             mask_Wmean(j,i) = nan;
@@ -343,12 +391,16 @@ for i = 1:length(deep_ray)
     end
 end
 
+% mask_Wmean = mask_Wmean .* RayDen;
+% mask_dWmean = mask_dWmean .* RayDen;
+% mask_std = mask_std  .* RayDen;
+
 %%  Mean model
 
 H=figure(5);clf;
 imagesc(Xg(1,:)',Z,Wmean);daspect([1 1 1]);
 colormap(cc);colorbar;
-caxis([300 5000]);
+caxis([300 4000]);
 hold on;patch(polygonX,polygonY,'w');
 plot(Topo(:,1),max(Topo(:,2)) - Topo(:,2),'k','linewidth',2);
 plot(deep_ray(:,1),deep_ray(:,2),'w--','linewidth',2);
@@ -389,12 +441,35 @@ print(H,imfile,'-dpdf','-cmyk');
 imfile = sprintf('%s/Profile_%s_StdVel.fig',figfolder,pronum);
 savefig(H,imfile,'compact');
 
+%% coefficient of variance (std / mean)
+H=figure(16);clf;
+imagesc(Xg(1,:)',Z(1,:),sqrt(Wvar/cnt)./Wmean*100);daspect([1 1 1]);
+colormap(cstd);colorbar;
+caxis([0 50]);
+hold on;patch(polygonX,polygonY,'w');
+plot(Topo(:,1),max(Topo(:,2)) - Topo(:,2),'k','linewidth',2);
+plot(deep_ray(:,1),deep_ray(:,2),'w--','linewidth',2);
+title(sprintf('Coefficient of variance (percent)'),'Fontsize',14, 'Interpreter', 'none');
+xlabel('Distance (m)');ylabel('Depth (m)')
+
+imfile = sprintf('%s/Profile_%s_CoefVar.pdf',figfolder,pronum);
+p1=4.5;
+
+set(gcf,'PaperPositionMode','auto')
+set(H,'Units','Inches','Position',[1 1 1.5*p1 p1])
+set(gcf,'Units','Inches', 'PaperSize', [1.5*p1 p1]);
+print(H,imfile,'-dpdf','-cmyk');
+
+imfile = sprintf('%s/Profile_%s_CoefVar.fig',figfolder,pronum);
+savefig(H,imfile,'compact');
+
 %% Mean vertical gradient (i.e. strength of interface)
 
 H=figure(7);clf;
 imagesc(Xg(1,:)',Z(1,:),dWmean);daspect([1 1 1]);
 colorbar;colormap(ccc);
-caxis([0 max(max(dWmean))*0.4]);
+% caxis([0 max(max(dWmean))*0.4]);
+caxis([-100 200]);
 hold on;patch(polygonX,polygonY,'w');
 plot(Topo(:,1),max(Topo(:,2)) - Topo(:,2),'k','linewidth',2);
 plot(deep_ray(:,1),deep_ray(:,2),'w--','linewidth',2);
@@ -456,12 +531,35 @@ print(H,imfile,'-dpdf','-cmyk');
 imfile = sprintf('%s/Masked_%s_StdVel.fig',figfolder,pronum);
 savefig(H,imfile,'compact');
 
+%% Masked coefficient of variance (std / mean)
+H=figure(17);clf;
+imagesc(Xg(1,:)',Z(1,:),sqrt(Wvar/cnt)./mask_Wmean*100);daspect([1 1 1]);
+colormap(cstd);colorbar;
+caxis([0 50]);
+hold on;patch(polygonX,polygonY,'w');
+plot(Topo(:,1),max(Topo(:,2)) - Topo(:,2),'k','linewidth',2);
+plot(deep_ray(:,1),deep_ray(:,2),'w--','linewidth',2);
+title(sprintf('Coefficient of variance (percent)'),'Fontsize',14, 'Interpreter', 'none');
+xlabel('Distance (m)');ylabel('Depth (m)')
+
+imfile = sprintf('%s/Masked_%s_CoefVar.pdf',figfolder,pronum);
+p1=4.5;
+
+set(gcf,'PaperPositionMode','auto')
+set(H,'Units','Inches','Position',[1 1 1.5*p1 p1])
+set(gcf,'Units','Inches', 'PaperSize', [1.5*p1 p1]);
+print(H,imfile,'-dpdf','-cmyk');
+
+imfile = sprintf('%s/Masked_%s_CoefVar.fig',figfolder,pronum);
+savefig(H,imfile,'compact');
+
 %% Masked Mean vertical gradient (i.e. strength of interface)
 
 H=figure(10);clf;
 imagesc(Xg(1,:)',Z(1,:),mask_dWmean);daspect([1 1 1]);
 colorbar;colormap(ccc);
-caxis([0 max(max(dWmean))*0.4]);
+% caxis([0 max(max(dWmean))*0.4]);
+caxis([-100 300]);
 hold on;patch(polygonX,polygonY,'w');
 plot(Topo(:,1),max(Topo(:,2)) - Topo(:,2),'k','linewidth',2);
 title(sprintf('Mean vertical gradient (m/s) Profile %s',pronum),'Fontsize',14, 'Interpreter', 'none');
@@ -482,8 +580,8 @@ savefig(H,imfile,'compact');
 
 H=figure(11);clf;set(gca,'Fontsize',14);box on
 hist(Nuclei(burn:Nens-1),unique(Nuclei(burn:Nens-1)))
-title(sprintf('Number of Cells, N=%d, Profile %s',cnt,pronum),'Fontsize',14, 'Interpreter', 'none')
-xlabel('Cells','Fontsize',14);ylabel('Frequency','Fontsize',14)
+title(sprintf('Number of control points, N=%d, Profile %s',cnt,pronum),'Fontsize',14, 'Interpreter', 'none')
+xlabel('Control points','Fontsize',14);ylabel('Frequency','Fontsize',14)
 
 p1=4.5;
 set(H,'Units','Inches','Position',[1 1 1.1*p1 p1])
