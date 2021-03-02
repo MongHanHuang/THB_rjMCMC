@@ -15,6 +15,7 @@
 %          Berit Hudson-Rasmussen (hudsonb@umd.edu)
 % 
 % Date: 11 Oct, 2020
+%        2 Mar, 2021 (update input file names enable FMM toolbox by Kroon 2021)
 
 %% 
 clear
@@ -110,7 +111,7 @@ parfor i = 1:NumChain
     [ENS{i},CNT{i},BD{i}] = run_MCMC(i,maxiter,hier,prior,model{i},psig,...
         sigind,Xg,Zg,ElevFMM,Nshot,ZrecFMM,XrecFMM,ZsrcFMM,XsrcFMM,...
         SrcNumber,maxZ,minZ,Tm{i},T,E{i},E0{i},cnt,kept,Dsig{i},datsav,...
-        ENS{i},birthDeath);
+        ENS{i},birthDeath,delta_X);
     
 end
 
@@ -188,7 +189,7 @@ PlotEnsembleRef2D_verD
 %% subroutine running iterations
 function [ensemble,cnt,birthDeath] = run_MCMC(ChainID,maxiter,hier,prior,model,psig,sigind,...
     Xg,Zg,ElevFMM,Nshot,ZrecFMM,XrecFMM,ZsrcFMM,XsrcFMM,SrcNumber,maxZ,minZ,Tm,T,E,E0,...
-    cnt,kept,Dsig,datsav,ensemble,birthDeath)
+    cnt,kept,Dsig,datsav,ensemble,birthDeath,delta_X)
 
 LabelPercent = maxiter/100*5; %show status with 5% increment
 tic
@@ -247,8 +248,11 @@ for m = 1:maxiter
                                
                 options.nb_iter_max = Inf;
                 
-                % Run FMM on reduced domain
+                %%% Run FMM on reduced domain using Peyre (2020) FMM toolbox (uncomment the line below if you want to use this toolbox)
                 D = perform_fast_marching(W2(:,mini:maxi), sp2, options);
+
+                %%% Run FMM on reduced domain using Kroon (2021) FMM toolbox (uncomment the line below if you want to use this toolbox)
+                % D = msfm2d(W2(:,mini:maxi), sp2, true, true)*delta_X/(maxZ-minZ));
                 
                 % Assign result to traveltime vector
                 for ii = 1:length(iind)
