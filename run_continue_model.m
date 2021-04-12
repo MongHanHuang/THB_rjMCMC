@@ -16,6 +16,7 @@
 % 
 % Date: 11 Oct, 2020
 %        2 Mar, 2021 (update input file names; enable FMM toolbox by Kroon 2021)
+%       12 Apr, 2021 (fix syntex error)
 
 %% 
 clear
@@ -23,16 +24,20 @@ close all
 
 MODEL_FOLDER_NAME = 'ModelA_test'; % File Name; it will be under "model" folder
 Last_Model_File_Name = 'result';  % output mat file name, saved under the model folder name
-output_name = 'result.1';  % need to update by user
 
-%% Users can redefine model parameters (highest/lowest velocity, proposal parameters)
+%%% Users can redefine model parameters (highest/lowest velocity, proposal parameters) %%%
 % Add subdirectory to matlab path
 addpath(genpath('./matcodes/'))
 
 % Add fast marching toolbox location to matlab path
 addpath(genpath('~/Documents/MATLAB/toolbox_fast_marching'))  % need to update by user
 
+file = ['models/' MODEL_FOLDER_NAME '/' Last_Model_File_Name '.mat'];  
+load(file)
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+output_name = 'result.1';  % need to update by user
+
 % Set iteration and burn-in constraints
 maxiter = 1e5;  % Maximum number of model 'iterations' (ex. 500000)
 
@@ -49,8 +54,7 @@ psig.x1D = 10;  % Proposal Sigma for moving single layer element verticaly, or e
 psig.n = 0.1; %0.1; % Proposal Sigma for changing noise parameter (unit in natural log)
 
 %% run iteration with number of chains; do not need to change below here
-file = ['models/' MODEL_FOLDER_NAME '/' Last_Model_File_Name '.mat'];  % need to update by user
-load(file)
+output_name = new_output_name;
 
 close all
 
@@ -152,9 +156,6 @@ burn = fix(burn_percent/100 * k);
 %%
 saveDataOne(['./models/' fname '/' fname '_Final_2D_ensemble.mat'],ensemble)
 
-%% save all of the products
-save(['./models/' fname '/' output_name '.mat']);
-
 %% plot misfit time series
 H=figure(16);clf;set(gca,'Fontsize',14);box on
 for i = 1:NumChain
@@ -185,6 +186,9 @@ savefig(H,imfile,'compact');
 
 %% Plot all of the figures
 PlotEnsembleRef2D_verD
+
+%% save all of the products
+save(['./models/' fname '/' output_name '.mat']);
 
 %% subroutine running iterations
 function [ensemble,cnt,birthDeath] = run_MCMC(ChainID,maxiter,hier,prior,model,psig,sigind,...
