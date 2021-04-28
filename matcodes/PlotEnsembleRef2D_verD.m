@@ -509,6 +509,39 @@ print(H,imfile,'-dpdf','-cmyk');
 imfile = sprintf('%s/Masked_%s_MeanVel.fig',figfolder,pronum);
 savefig(H,imfile,'compact');
 
+%% Interpolate masked mean model
+[x,y] = size(mask_Wmean);
+S = mask_Wmean(:);
+nanS = find(isnan(mask_Wmean)==0);
+S_s = S(nanS);
+[yi,xi] = meshgrid(1:y,1:x);
+Xc = xi(:);
+Yc = yi(:);
+Xs = Xc(nanS);
+Ys = Yc(nanS);
+mask_W_intp = griddata(Xs,Ys,S_s,xi,yi,'cubic');
+mask_W_intp = mask_W_intp .* mask;
+
+H=figure(25);clf;
+imagesc(Xg(1,:)',Z,mask_W_intp);daspect([1 1 1]);
+colormap(cc);colorbar;
+caxis([0 4000]);
+hold on;patch(polygonX,polygonY,'w');
+plot(Topo(:,1),max(Topo(:,2)) - Topo(:,2),'k','linewidth',2);
+title(sprintf('Mean velocity (m/s) Profile %s',pronum),'Fontsize',14, 'Interpreter', 'none');
+xlabel('Distance (m)');ylabel('Depth (m)')
+
+imfile = sprintf('%s/Masked_Interp_%s_MeanVel.pdf',figfolder,pronum);
+p1=4.5;
+
+set(gcf,'PaperPositionMode','auto')
+set(H,'Units','Inches','Position',[1 1 1.5*p1 p1])
+set(gcf,'Units','Inches', 'PaperSize', [1.5*p1 p1]);
+print(H,imfile,'-dpdf','-cmyk');
+
+imfile = sprintf('%s/Masked_Interp_%s_MeanVel.fig',figfolder,pronum);
+savefig(H,imfile,'compact');
+
 %% Masked Standard deviation of model
 
 H=figure(9);clf;
