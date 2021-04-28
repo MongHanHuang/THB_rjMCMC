@@ -36,7 +36,7 @@ file = ['models/' MODEL_FOLDER_NAME '/' Last_Model_File_Name '.mat'];
 load(file)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-output_name = 'result.1';  % need to update by user
+new_output_name = 'result.1';  % need to update by user
 
 % Set iteration and burn-in constraints
 maxiter = 1e5;  % Maximum number of model 'iterations' (ex. 500000)
