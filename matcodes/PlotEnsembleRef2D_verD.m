@@ -322,89 +322,75 @@ print(H,imfile,'-dpdf','-cmyk');
 imfile = sprintf('%s/Raypath_%s.fig',figfolder,pronum);
 savefig(H,imfile,'compact');
 
-%% plot raypath density 
-% [y, x] = size(Wmean);
-% dX = delta_X;
-% dist_threshold = 5;
-% RayDen = zeros(y,x);
-% 
-% for i = 1:y
-%     for j = 1:x
-%         dist = sqrt((RayPath(:,1)-Xg(1,j)).^2 + (RayPath(:,2)-Z(i)).^2);
-%         dist(dist > dist_threshold/dX) = [];
-%         RayDen(i,j) = length(dist);
-%     end
-% end
-% 
-% % figure;imagesc(Xg(1,:)',Z(1,:),RayDen);axis image;
-% 
-% RayDen(RayDen>0) = 1;
-% RayDen(RayDen~=1) = nan;
-
-%% plot raypath density (coarse resolution)
+%% Estimate ray path density
 [y, x] = size(Wmean);
 dX = delta_X;
-dist_threshold = 1;
-ray_threshold = 10;
-RayDen = zeros(y,x);
+ray_threshold = 1; % minimum ray path number
+ray_smooth = 5; % radius of a median fitler
+RayDen0 = zeros(y,x);
+mask = zeros(y,x);
 
-k = 0;
-for i = 1:4:y
-    for j = 1:4:x
-        k = k+1;
-        dist = sqrt((RayPath(:,1)-Xg(1,j)).^2 + (RayPath(:,2)-Z(i)).^2);
-        dist(dist > dist_threshold/dX) = [];
-        RayDenP(k,1) = Z(1,i);
-        RayDenP(k,2) = Xg(1,j);
-        RayDenP(k,3) = length(dist);
+MinX = min(RayPath(:,1))-dX;
+MinY = min(RayPath(:,2))-dX;
+
+for i = 1:length(RayPath)
+    tmp_x = round((RayPath(i,1)-MinX)/dX);
+    tmp_y = round((RayPath(i,2)-MinY)/dX);
+    if tmp_x < x && tmp_y < y
+        RayDen0(tmp_y,tmp_x) = RayDen0(tmp_y,tmp_x)+1;
     end
 end
 
-%figure;scatter(RayDenP(:,2),-RayDenP(:,1),100,RayDenP(:,3),'filled');axis image;
-
-[yyy,xxx] = meshgrid(Xg(1,:),Z);
-RayDen = griddata(RayDenP(:,2),RayDenP(:,1),RayDenP(:,3),yyy,xxx);
-RayDen(RayDen > ray_threshold) = 1;
-RayDen(RayDen~=1) = nan;
-figure;imagesc(Xg(1,:)',Z(1,:),RayDen);axis image;
-
-%% find the deepest ray and remove images below it
-deep_ray = X';
-deep_ray(:,2) = 0;
-[~,id] = sort(RayPath);
-[y, x] = size(Wmean);
-
-mask_Wmean = Wmean;
-mask_dWmean = dWmean;
-mask_std = sqrt(Wvar/cnt);
-
-for i = 1:length(deep_ray)
-    dist = abs(deep_ray(i,1) - RayPath(:,1));
-    [tmp_dist,~] = find(dist < 1.5*dX);
-    deep_ray(i,2) = max(RayPath(tmp_dist,2));
+for i = 1:x
     for j = 1:y
-        if j*dX > deep_ray(i,2)
-            mask_Wmean(j,i) = nan;
-            mask_dWmean(j,i) = nan;
-            mask_std(j,i) = nan;
+        if RayDen0(j,i) ~= 0
+            deep_ray(i,1) = (i-1)*dX;
+            deep_ray(i,2) = (j+1)*dX;
+            mask(1:j,i) = 1;
         end
     end
 end
 
-% mask_Wmean = mask_Wmean .* RayDen;
-% mask_dWmean = mask_dWmean .* RayDen;
-% mask_std = mask_std  .* RayDen;
+mask(mask==0) = nan;
+
+RayDen = medfilt2(RayDen0,[ray_smooth ray_smooth]);
+RayDen(RayDen < ray_threshold) = nan;
+RayDen(isnan(RayDen)==0) = 1;
+
+H=figure(26);
+imagesc(Xg(1,:)',Z(1,:),log10(RayDen0));axis image;colormap([1 1 1;crameri('vik')]);
+title(sprintf('Log ray path density %s',pronum),'Fontsize',14, 'Interpreter', 'none');
+xlabel('Distance (m)');ylabel('Depth (m)')
+
+imfile = sprintf('%s/RayPathDensity_%s.pdf',figfolder,pronum);
+p1=4.5;
+
+set(gcf,'PaperPositionMode','auto')
+set(H,'Units','Inches','Position',[1 1 1.5*p1 p1])
+set(gcf,'Units','Inches', 'PaperSize', [1.5*p1 p1]);
+print(H,imfile,'-dpdf','-cmyk');
+
+imfile = sprintf('%s/RayPathDensity_%s.fig',figfolder,pronum);
+savefig(H,imfile,'compact');
+
+% add one raw in the bottom of dWmean so the size matches
+[y,x] = size(dWmean_o);
+dWmean = dWmean_o;
+dWmean(y+1,:) = dWmean_o(y,:);
+
+mask_Wmean = Wmean .* RayDen;
+mask_dWmean = dWmean .* RayDen;
+mask_std = sqrt(Wvar/cnt) .* RayDen;
 
 %%  Mean model
-
 H=figure(5);clf;
 imagesc(Xg(1,:)',Z,Wmean);daspect([1 1 1]);
 colormap(cc);colorbar;
-caxis([300 4000]);
+caxis([0 4000]);
 hold on;patch(polygonX,polygonY,'w');
 plot(Topo(:,1),max(Topo(:,2)) - Topo(:,2),'k','linewidth',2);
 plot(deep_ray(:,1),deep_ray(:,2),'w--','linewidth',2);
-title(sprintf('Mean velocity (m/s) Profile %s',pronum),'Fontsize',14, 'Interpreter', 'none');
+title(sprintf('Mean velocity (m/s) %s',pronum),'Fontsize',14, 'Interpreter', 'none');
 xlabel('Distance (m)');ylabel('Depth (m)')
 
 imfile = sprintf('%s/Profile_%s_MeanVel.pdf',figfolder,pronum);
@@ -419,7 +405,6 @@ imfile = sprintf('%s/Profile_%s_MeanVel.fig',figfolder,pronum);
 savefig(H,imfile,'compact');
 
 %% Standard deviation of model
-
 H=figure(6);clf;
 imagesc(Xg(1,:)',Z(1,:),sqrt(Wvar/cnt));daspect([1 1 1]);
 colormap(cstd);colorbar;
@@ -442,8 +427,9 @@ imfile = sprintf('%s/Profile_%s_StdVel.fig',figfolder,pronum);
 savefig(H,imfile,'compact');
 
 %% coefficient of variance (std / mean)
+CoV = sqrt(Wvar/cnt)./Wmean*100;
 H=figure(16);clf;
-imagesc(Xg(1,:)',Z(1,:),sqrt(Wvar/cnt)./Wmean*100);daspect([1 1 1]);
+imagesc(Xg(1,:)',Z(1,:),CoV);daspect([1 1 1]);
 colormap(cstd);colorbar;
 caxis([0 50]);
 hold on;patch(polygonX,polygonY,'w');
@@ -464,7 +450,6 @@ imfile = sprintf('%s/Profile_%s_CoefVar.fig',figfolder,pronum);
 savefig(H,imfile,'compact');
 
 %% Mean vertical gradient (i.e. strength of interface)
-
 H=figure(7);clf;
 imagesc(Xg(1,:)',Z(1,:),dWmean);daspect([1 1 1]);
 colorbar;colormap(ccc);
@@ -473,7 +458,7 @@ caxis([-100 200]);
 hold on;patch(polygonX,polygonY,'w');
 plot(Topo(:,1),max(Topo(:,2)) - Topo(:,2),'k','linewidth',2);
 plot(deep_ray(:,1),deep_ray(:,2),'w--','linewidth',2);
-title(sprintf('Mean vertical gradient (m/s) Profile %s',pronum),'Fontsize',14, 'Interpreter', 'none');
+title(sprintf('Mean vertical gradient (m/s) %s',pronum),'Fontsize',14, 'Interpreter', 'none');
 xlabel('Distance (m)');ylabel('Depth (m)')
 
 imfile = sprintf('%s/Profile_%s_MeanGrad.pdf',figfolder,pronum);
@@ -487,15 +472,28 @@ print(H,imfile,'-dpdf','-cmyk');
 imfile = sprintf('%s/Profile_%s_MeanGrad.fig',figfolder,pronum);
 savefig(H,imfile,'compact');
 
-%% Masked Mean model
+%% Masked Mean model (crop out regions where CoV < a threshold)
+CoV_threshold = 40; % percent
+
+mask_CoV = CoV;
+mask_CoV(mask_CoV < CoV_threshold) = 1;
+mask_CoV(mask_CoV~=1) = nan;
+
+[y, x] = size(Wmean);
+mask_offset = ones(y,x);
+for i = 1:x
+    if i < min(XrecFMM) || i > max(XrecFMM)
+        mask_offset(:,i) = nan;
+    end
+end
 
 H=figure(8);clf;
-imagesc(Xg(1,:)',Z,mask_Wmean);daspect([1 1 1]);
+imagesc(Xg(1,:)',Z,mask_Wmean .* mask_CoV .* mask_offset);daspect([1 1 1]);
 colormap(cc);colorbar;
-caxis([300 5000]);
+caxis([0 4000]);
 hold on;patch(polygonX,polygonY,'w');
 plot(Topo(:,1),max(Topo(:,2)) - Topo(:,2),'k','linewidth',2);
-title(sprintf('Mean velocity (m/s) Profile %s',pronum),'Fontsize',14, 'Interpreter', 'none');
+title(sprintf('Masked Mean velocity (m/s) %s',pronum),'Fontsize',14, 'Interpreter', 'none');
 xlabel('Distance (m)');ylabel('Depth (m)')
 
 imfile = sprintf('%s/Masked_%s_MeanVel.pdf',figfolder,pronum);
@@ -511,8 +509,9 @@ savefig(H,imfile,'compact');
 
 %% Interpolate masked mean model
 [x,y] = size(mask_Wmean);
-S = mask_Wmean(:);
-nanS = find(isnan(mask_Wmean)==0);
+mask_Wmean2 = mask_Wmean .* mask_CoV .* mask_offset;
+S = mask_Wmean2(:);
+nanS = find(isnan(mask_Wmean2)==0);
 S_s = S(nanS);
 [yi,xi] = meshgrid(1:y,1:x);
 Xc = xi(:);
@@ -520,7 +519,7 @@ Yc = yi(:);
 Xs = Xc(nanS);
 Ys = Yc(nanS);
 mask_W_intp = griddata(Xs,Ys,S_s,xi,yi,'cubic');
-mask_W_intp = mask_W_intp .* mask;
+mask_W_intp = mask_W_intp .* mask .* mask_offset;
 
 H=figure(25);clf;
 imagesc(Xg(1,:)',Z,mask_W_intp);daspect([1 1 1]);
@@ -528,7 +527,7 @@ colormap(cc);colorbar;
 caxis([0 4000]);
 hold on;patch(polygonX,polygonY,'w');
 plot(Topo(:,1),max(Topo(:,2)) - Topo(:,2),'k','linewidth',2);
-title(sprintf('Mean velocity (m/s) Profile %s',pronum),'Fontsize',14, 'Interpreter', 'none');
+title(sprintf('Interpolated Mean velocity (m/s) %s',pronum),'Fontsize',14, 'Interpreter', 'none');
 xlabel('Distance (m)');ylabel('Depth (m)')
 
 imfile = sprintf('%s/Masked_Interp_%s_MeanVel.pdf',figfolder,pronum);
@@ -540,50 +539,6 @@ set(gcf,'Units','Inches', 'PaperSize', [1.5*p1 p1]);
 print(H,imfile,'-dpdf','-cmyk');
 
 imfile = sprintf('%s/Masked_Interp_%s_MeanVel.fig',figfolder,pronum);
-savefig(H,imfile,'compact');
-
-%% Masked Standard deviation of model
-
-H=figure(9);clf;
-imagesc(Xg(1,:)',Z(1,:),mask_std);daspect([1 1 1]);
-colormap(cstd);colorbar;
-caxis([0 1000]);
-hold on;patch(polygonX,polygonY,'w');
-plot(Topo(:,1),max(Topo(:,2)) - Topo(:,2),'k','linewidth',2);
-title(sprintf('STD in velocity (m/s)'),'Fontsize',14, 'Interpreter', 'none');
-xlabel('Distance (m)');ylabel('Depth (m)')
-
-imfile = sprintf('%s/Masked_%s_StdVel.pdf',figfolder,pronum);
-p1=4.5;
-
-set(gcf,'PaperPositionMode','auto')
-set(H,'Units','Inches','Position',[1 1 1.5*p1 p1])
-set(gcf,'Units','Inches', 'PaperSize', [1.5*p1 p1]);
-print(H,imfile,'-dpdf','-cmyk');
-
-imfile = sprintf('%s/Masked_%s_StdVel.fig',figfolder,pronum);
-savefig(H,imfile,'compact');
-
-%% Masked coefficient of variance (std / mean)
-H=figure(17);clf;
-imagesc(Xg(1,:)',Z(1,:),sqrt(Wvar/cnt)./mask_Wmean*100);daspect([1 1 1]);
-colormap(cstd);colorbar;
-caxis([0 50]);
-hold on;patch(polygonX,polygonY,'w');
-plot(Topo(:,1),max(Topo(:,2)) - Topo(:,2),'k','linewidth',2);
-plot(deep_ray(:,1),deep_ray(:,2),'w--','linewidth',2);
-title(sprintf('Coefficient of variance (percent)'),'Fontsize',14, 'Interpreter', 'none');
-xlabel('Distance (m)');ylabel('Depth (m)')
-
-imfile = sprintf('%s/Masked_%s_CoefVar.pdf',figfolder,pronum);
-p1=4.5;
-
-set(gcf,'PaperPositionMode','auto')
-set(H,'Units','Inches','Position',[1 1 1.5*p1 p1])
-set(gcf,'Units','Inches', 'PaperSize', [1.5*p1 p1]);
-print(H,imfile,'-dpdf','-cmyk');
-
-imfile = sprintf('%s/Masked_%s_CoefVar.fig',figfolder,pronum);
 savefig(H,imfile,'compact');
 
 %% Masked Mean vertical gradient (i.e. strength of interface)
