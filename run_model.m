@@ -90,6 +90,8 @@ psig.n = 0.1;   % Proposal Sigma for changing noise parameter (unit in natural l
 Master(:,4) = Master(:,3);
 Master(:,3) = Master(:,2);
 Master(:,2) = Master(:,4) - Master(:,3);
+[~,id0] = sort(Master(:,4)); % sort the table with increasing geophone location orders
+Master = Master(id0,:);
 
 % Calculate the actual burn-in number
 total_save = maxiter/datsav;
