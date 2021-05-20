@@ -344,7 +344,7 @@ end
 for i = 1:x
     for j = 1:y
         if RayDen0(j,i) ~= 0
-            deep_ray(i,1) = (i-1)*dX;
+            deep_ray(i,1) = (i-1)*dX+minX;
             deep_ray(i,2) = (j+1)*dX;
             mask(1:j,i) = 1;
         end
