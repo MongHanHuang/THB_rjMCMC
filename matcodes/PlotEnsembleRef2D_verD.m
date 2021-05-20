@@ -63,7 +63,7 @@ Nens = length(E); % number of models in ensemble
 % Initialize parameters for running mean and variance calc
 Wmean = 0;
 Wvar = 0;
-dWmean = 0;
+dWmean_o = 0;
 dWvar = 0;
 
 % Colorbar with topo
@@ -104,9 +104,9 @@ for ii=1:length(X0)
     Wvar = Wvar+(W-Wmean).*(W-Wmean0);
     
     % Update running mean and variance calculation
-    dWmean0 = dWmean;
-    dWmean = dWmean0 + (dW-dWmean0)/(cnt-1);
-    dWvar = dWvar+(dW-dWmean).*(dW-dWmean0);
+    dWmean0 = dWmean_o;
+    dWmean_o = dWmean0 + (dW-dWmean0)/(cnt-1);
+    dWvar = dWvar+(dW-dWmean_o).*(dW-dWmean0);
 
 end
 
