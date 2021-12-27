@@ -2,12 +2,14 @@
 % Markov Chain Monte Carlo (rjMCMC) code for seismic refraction
 % 
 % Descreiption:
-%         Please find the user guide for more details
+%         Please find the user guide (THB2D MCMC User Guide v4.pdf) for more details
 %         
-% Please cite this code as: Huang, M.-H., Hudson-Rasmussen, B., Burdick, S., 
-% Lekic, V., Nelson, M.D., Fauria, K.E., and Schmerr, N., (2020), Bayesian 
-% seismic refraction inversion for critical zone science and near-surface 
-% applications, submitted to Geochem. Geophys. Geosys.
+% Please cite this code as: 
+% Huang, M.-H., Hudson-Rasmussen, B., Burdick, S., Lekic, V., Nelson, M.D.,
+%     Fauria, K.E., and Schmerr, N., (2020), Bayesian seismic refraction 
+%     inversion for critical zone science and near-surface applications, 
+%     Geopchemistry, Geophysics, Geosystems, 22, e2020GC009172.
+%     https://doi.org/10.1029/2020GC009172
 %     
 % Authors: Mong-Han Huang (mhhuang@umd.edu)
 %          Scott Burdick (sburdick@wayne.edu)
@@ -16,6 +18,9 @@
 % 
 % Date: 11 Oct, 2020
 %        2 Mar, 2021 (update input file names; enable FMM toolbox by Kroon 2021)
+%        1 Apr, 2021 (update noise hyperparameter with noise varied with distance
+%       14 Sep, 2021 (enable different interpolation methods; disable "swap")
+%       19 Dec, 2021 (include raypath as an output in each iteration; add transparency to masked images)
 
 %%
 clear
@@ -28,6 +33,10 @@ addpath(genpath('./matcodes/'))
 
 % Add fast marching toolbox location to matlab path
 addpath(genpath('~/Documents/MATLAB/toolbox_fast_marching'))
+
+% Add fast marching toolbox location to matlab path (for Fast Marching by
+% Dirk-Jan Kroon)
+addpath(genpath('~/Documents/MATLAB/FastMarching_version3b'))
 
 clear Tmm ensemble
 
@@ -49,9 +58,13 @@ Fname_Pronum_swtch = 1; % set to '1' to provide "File Name" & "Profile Number" h
 MODEL_FOLDER_NAME = 'ModelA_test'; % File Name; it will be under "model" folder
 OUTPUT_FILE_NAME = 'result';  % output mat file name, saved under the model folder name
 
+% Set the interpolation method ("linear" or "nearest")
+% linear generates smoother model
+interpMethod = 'linear';
+
 %%% Initial model setting %%%
 % Choose depth range
-maxZ = 70; % meters
+maxZ = 65; % meters
 minZ = 0; % meters
 
 % Define grid size in X & Z dimensions
@@ -59,37 +72,39 @@ delta_X = 1; % m; horixontal delta distance between points (this value should be
 delta_Z = delta_X; % m; vertical (depth) distance between points (suggest to be the same as delta_X)
 
 % Initial velocity and depth to top of layer
-v0 = [400 800 1500 2000 2500 3000 4000 5000]'; % unit: meters per sec
-zz0 = [0 10 20 30 40 50 60 maxZ]'; % depth of each layer in meters; need to be exactly the same number as v0
-Ncol0 = 30; % hingeline number for the initial model geometry
+v0 = [300 1000 2000 6000]'; % unit: meters per sec
+zz0 = [0 10 30 maxZ]'; % depth of each layer in meters; need to be exactly the same number as v0
+Ncol0 = 40; % control pt number for the initial model geometry
 
 %%% Prior model setting %%%
 % Prior range for velocities and interface depths
-prior.v1D = [300 5000]; % Lowest & Highest velocities allowed (m/s)
+prior.v1D = [300 6000]; % Lowest & Highest velocities allowed (m/s)
 prior.h1D = [0 maxZ];
-prior.Nuclei = 500; % Maximum number of nuclei (has to be > 4)
+prior.Nuclei = 1000; % Maximum number of nuclei (has to be > 4)
 prior.n = [-6 1]; % Range for prior noise estimate; in log10 base; unit in log [ms]
+prior.n2 = [0 1e-3]; % Range for prior noise estimate slope; unit in [ms/m]
 
 % Set iteration and burn-in constraints
 NumChain = 4; % number of chains you want to use (set this to be <= 4 if you are running this on a laptop)
-maxiter = 1e5;  % Maximum number of model 'iterations' (ex. 500000)
+maxiter = 2e4;  % Maximum number of model 'iterations' (ex. 500000)
 hier = 1;  % Hierachical switch? Otherwise = 0 (suggest to keep it to 1)
-datsav= 200;  % Save model to ensemble every this many 'iterations' (ex. 100)
+datsav= 500;  % Save model to ensemble every this many 'iterations' (ex. 100)
 burn_percent = 60; % Start doing stats after this many saved models; in percentage
 
 %%% Proposal model parameters %%%
 % "Proposal Sigmas"
 % Standard deviations for proposing changes to model
 psig.v1D = 300; % Proposal Sigma for changing velocity (m/s)
-psig.z1D = 10;  % Proposal Sigma for moving single nucleus verticaly (in m; # determines how much distance it can move)
-psig.x1D = 30;  % Proposal Sigma for moving single nucleus laterally (in m; # determines how much distance it can move)
+psig.z1D = 5;  % Proposal Sigma for moving single nucleus verticaly (in m; # determines how much distance it can move)
+psig.x1D = 10;  % Proposal Sigma for moving single nucleus laterally (in m; # determines how much distance it can move)
 psig.n = 0.1;   % Proposal Sigma for changing noise parameter (unit in natural log)
+psig.n2 = 0.01e-3; % Proposal Sigma for noise parameter slope with distance (unit in [ms/m])
 
 %% PROCESSING (No need to change below here) 
 % Rearrange the structure of Master (arrival time, receiver loc - shot loc , shot loc, receiver loc)
-Master(:,4) = Master(:,3);
-Master(:,3) = Master(:,2);
-Master(:,2) = Master(:,4) - Master(:,3);
+Master(:,4) = Master(:,3); % receiver location
+Master(:,3) = Master(:,2); % source location
+Master(:,2) = Master(:,4) - Master(:,3); % distance between source and receiver
 [~,id0] = sort(Master(:,4)); % sort the table with increasing geophone location orders
 Master = Master(id0,:);
 
@@ -119,6 +134,7 @@ save(['./models/' fname '/' fname '_2D_params.mat'])
 T= Master(:,1);  % Traveltimes
 Xsrc = Master(:,3); % Source Locations
 Xrec = Master(:,4); % Receiver Locations
+Xsrc_rec = abs(Master(:,2)); % source - receiver distance
 
 % Find entries with zero offset or no traveltime pick
 % and remove them from data
@@ -126,6 +142,7 @@ nono = abs(Master(:,2))==0 | isnan(T) | T==0 ;
 Xsrc(nono)=[];
 Xrec(nono)=[];
 T(nono)=[];
+Xsrc_rec(nono) = [];
 
 % Find unique source locations
 [XsrcUnique,~,SrcNumber] = unique(Xsrc);
@@ -133,21 +150,8 @@ Nshot = length(XsrcUnique);
 
 % Determine edges of model domain (colume 3 is source, 4 is receiver
 % locations)
-if min(Master(:,3)) < min(Master(:,4))
-    minX = min(Master(:,3));
-elseif min(Master(:,3)) >= min(Master(:,4))
-    minX = min(Master(:,4));
-else  %this shouldn't exist
-    minX = min(XsrcUnique);
-end
-
-if max(Master(:,3)) > max(Master(:,4))
-    maxX = max(Master(:,3));
-elseif max(Master(:,3)) <= max(Master(:,4))
-    maxX = max(Master(:,4));
-else %this shouldn't exit
-    maxX = max(XsrcUnique);
-end
+minX = min(min(Master(:,3)) , min(Master(:,4)));
+maxX = max(max(Master(:,3)) , max(Master(:,4)));
 
 % Define size of domain
 Xrange = maxX-minX;
@@ -166,18 +170,27 @@ prior.x1D = [minX,maxX];
 save(['./models/' fname '/' fname '_2D_params.mat'],'Nx','Nz','X','Z','Xg','Zg','-append')
 
 % Load topography
-Topox = Topo(:,1);
-Topoz = max(Topo(:,2))-Topo(:,2);
+% Get rid of topography less and greater than minX and maxX
+idx = find(Topo(:,1)>maxX+1);
+Topo(idx,:) = [];
+idx = find(Topo(:,1)<minX-1);
+Topo(idx,:) = [];
+
+
+TopoxTmp = Topo(:,1);
+TopozTmp = max(Topo(:,2))-Topo(:,2);
 
 % Interpolate topography onto X grid
+[Topox,id] = unique(TopoxTmp);
+Topoz = TopozTmp(id);
 Elev = (interp1(Topox,Topoz,X,'spline'))';
 
 % Find top of topography for FMM
 ElevFMM = round((Nz-1)*(Elev-minZ)/Zrange + 1);
 
 % Define source and receiver locations for FMM algorithm
-XsrcFMM = (Nx-1)*(XsrcUnique-minX)/Xrange + 1;
-XrecFMM = (Nx-1)*(Xrec-minX)/Xrange + 1;
+XsrcFMM = double(int16((Nx-1)*(XsrcUnique-minX)/Xrange + 1));
+XrecFMM = double(int16((Nx-1)*(Xrec-minX)/Xrange + 1));
 ZsrcFMM = ElevFMM(fix(XsrcFMM));
 ZrecFMM = ElevFMM(fix(XrecFMM));
 
@@ -187,7 +200,6 @@ save(['./models/' fname '/' fname '_2D_grid.mat'],'X','Z','Xg','Zg','ElevFMM')
 model0.v1D = v0;
 model0.xx = linspace(minX,maxX,Ncol0);
 model0.zz = repmat(zz0,1,Ncol0);
-
 [dimz , dimx] = size(model0.zz);
 
 k = 0;
@@ -249,6 +261,7 @@ Nsig = 1; % Number of noise variables
 
 % Initialize hierarchical covariance param. based on initial data fit
 model.xsig = log(sqrt(sum((T-Tm).^2)./Ndata)); % mean misfit in log_e scale
+model.xsig2 = 0; % assume no distance dep. noise
 
 % Initialize model success index
 model.success = 0;
@@ -277,15 +290,17 @@ birthDeath = zeros(1,6);
 ENS = cell(NumChain,1);
 CNT = cell(NumChain,1);
 BD = cell(NumChain,1);
+Ray = cell(NumChain,1);
 
 %% run iteration with number of chains
 tic
 parfor i = 1:NumChain
     ENS{i} = ensemble;
     
-    [ENS{i},CNT{i},BD{i}] = run_MCMC(i,maxiter,hier,prior,model,psig,sigind,...
+    [ENS{i},CNT{i},BD{i},Ray{i}] = run_MCMC(i,maxiter,hier,prior,model,psig,sigind,...
         Xg,Zg,ElevFMM,Nshot,ZrecFMM,XrecFMM,ZsrcFMM,XsrcFMM,SrcNumber,maxZ,...
-        minZ,Tm,T,E,E0,cnt,kept,Dsig,datsav,ENS{i},birthDeath,delta_X);
+        minZ,Tm,T,E,E0,cnt,kept,Dsig,datsav,ENS{i},birthDeath,Xsrc_rec,...
+        delta_X,interpMethod,minX,Ray{i});
     
 end
 
@@ -294,12 +309,13 @@ t = toc;
 disp(['Total CPU time: ' num2str(t/3600) ' hours']);
 
 %% merge all of the chains back to ensemble
-clear ensemble
+clear ensemble raypath
 k = 0;
 for j = 1:CNT{1}-1
     for i = 1:NumChain
         k = k+1;
         ensemble(k) = ENS{i}(j);
+        raypath(k) = Ray{i}(j);
     end
 end
 
@@ -314,48 +330,24 @@ for i = 1:NumChain
     BirthDeath(6) = BirthDeath(6) + BD{i}(6);    
 end
 
-% disp(['Birth: ' num2str(BirthDeath(1)) ' Death: ' num2str(BirthDeath(2))]);
+disp(['Birth: ' num2str(BirthDeath(1)) ' Death: ' num2str(BirthDeath(2))]);
 disp(['Birth rate: ' num2str(BirthDeath(1)/maxiter/NumChain*100) ' %']);
 disp(['Death rate: ' num2str(BirthDeath(2)/maxiter/NumChain*100) ' %']);
 disp(['Noise rate: ' num2str(BirthDeath(3)/maxiter/NumChain*100) ' %']);
-disp(['SwapV rate: ' num2str(BirthDeath(4)/maxiter/NumChain*100) ' %']);
+% disp(['SwapV rate: ' num2str(BirthDeath(4)/maxiter/NumChain*100) ' %']);
 disp(['Move rate: ' num2str(BirthDeath(5)/maxiter/NumChain*100) ' %']);
 disp(['ChangeV rate: ' num2str(BirthDeath(6)/maxiter/NumChain*100) ' %']);
 
-%% Save products
-saveDataOne(['./models/' fname '/' fname '_Final_2D_ensemble.mat'],ensemble)
-
 %% Save all of the products
-save(['./models/' fname '/' outname '.mat']);
+save(['./models/' fname '/' outname '.mat'],'-v7.3');
 
+%% Plot all of the figures
 PlotEnsembleRef2D_verD
 
-%% plot misfit time series
-H=figure(1);clf;set(gca,'Fontsize',14);box on
-for i = 1:NumChain
-    tmp = [ENS{i}.E0]/Ndata; %misfit square
-    NNEN = length(ENS{i});
-    semilogx((1:NNEN)*datsav,sqrt(tmp)*1e3,'linewidth',1.5); %plot in log scale
-    hold on;
-end
-xlabel('Iterations','Fontsize',14);
-ylabel('RMSE misfit (ms)','Fontsize',14);
-
-figfolder = ['./models/' fname '/figures/'];
-p1=3.5;
-set(H,'Units','Inches','Position',[1 1 1.5*p1 p1])
-imfile = sprintf('%s/MulChain_%s_RawMisfit.pdf',figfolder,pronum);
-set(gcf,'PaperPositionMode','auto')
-set(gcf,'Units','Inches', 'PaperSize', [1.5*p1 p1]);
-print(H,imfile,'-dpdf','-cmyk');
-
-imfile = sprintf('%s/MulChain_%s_RawMisfit.fig',figfolder,pronum);
-savefig(H,imfile,'compact');
-
 %% subroutine running iterations
-function [ensemble,cnt,birthDeath] = run_MCMC(ChainID,maxiter,hier,prior,model,psig,sigind,...
+function [ensemble,cnt,birthDeath,Ray] = run_MCMC(ChainID,maxiter,hier,prior,model,psig,sigind,...
     Xg,Zg,ElevFMM,Nshot,ZrecFMM,XrecFMM,ZsrcFMM,XsrcFMM,SrcNumber,maxZ,minZ,Tm,T,E,E0,...
-    cnt,kept,Dsig,datsav,ensemble,birthDeath,delta_X)
+    cnt,kept,Dsig,datsav,ensemble,birthDeath,Xsrc_rec,delta_X,interpMethod,minX,Ray)
 
 LabelPercent = maxiter/100*5; %show status with 5% increment
 tic
@@ -374,13 +366,13 @@ for m = 1:maxiter
     if model2.success == 1
         
         % Update hierarchical noise parameter
-        Dsig2 = exp(model2.xsig(sigind));
+        Dsig2 = exp(model2.xsig(sigind)) + model2.xsig2 .* Xsrc_rec; %updated Apr. 21, 2021
         
         if ~strcmp(oper(1:3),'noi')  %If not hierarchical step
             
             % Create new model
             F = scatteredInterpolant(model2.zz',model2.xx',model2.v1D');
-            F.Method = 'linear';
+            F.Method = interpMethod;
             W2 = F(Zg,Xg);
             [dimz , dimx] = size(W2);
             for i = 1:dimx
@@ -418,7 +410,7 @@ for m = 1:maxiter
                 D = perform_fast_marching(W2(:,mini:maxi), sp2, options);
 
                 %%% Run FMM on reduced domain using Kroon (2021) FMM toolbox (uncomment the line below if you want to use this toolbox)
-                % D = msfm2d(W2(:,mini:maxi), sp2, true, true)*delta_X/(maxZ-minZ));
+%                 D = msfm2d(W2(:,mini:maxi), sp2, false, false)*delta_X/(maxZ-minZ);
                                                      
                 % Assign result to traveltime vector
                 for ii = 1:length(iind)
@@ -431,7 +423,6 @@ for m = 1:maxiter
             Tm2= Tm;
         end
         
-        % Recalculate error function
         E2=sum((T-Tm2).^2./Dsig2.^2);
         E02=sum((T-Tm2).^2);
         
@@ -476,9 +467,64 @@ for m = 1:maxiter
         ensemble(cnt).xx=model.xx;
         ensemble(cnt).zz=model.zz;
         ensemble(cnt).xsig=model.xsig;
+        ensemble(cnt).xsig2=model.xsig2;
         ensemble(cnt).E=E;
         ensemble(cnt).E0=E0;
         ensemble(cnt).Nuclei=Nuclei;
+        
+        % re-run fast marching and output raypath
+        RayPath = [0 0];       
+        for ishot = 1:Nshot
+            
+            % Define source location
+            start_point = [ZsrcFMM(ishot); XsrcFMM(ishot)];
+            
+            % Which data are from this shot?
+            iind = find(SrcNumber==ishot);
+            
+            % Define receiver locations
+            end_points = [ZrecFMM(iind)';XrecFMM(iind)'];
+            
+            % Find min and max X coordinates for this shot
+            maxi = max([end_points(2,:) start_point(2,:)]);
+            mini = min([end_points(2,:) start_point(2,:)]);
+            
+            % Define source and receiver locations on reduced domain
+            sp2 = start_point;
+            sp2(2,:) = sp2(2,:) - mini+1;
+            
+            ep2 = end_points;
+            ep2(2,:) = ep2(2,:) - mini+1;
+                       
+            options.nb_iter_max = Inf;
+            
+            % Run FMM on reduced domain
+            D = perform_fast_marching(W2, start_point, options);
+            gpath = compute_geodesic(D,end_points);
+            
+            for i = 1:length(gpath)
+                [M,~] = size(RayPath);
+                N = length(gpath{i});
+                RayPath(M:M+N-1,1) = gpath{i}(2,:)*delta_X+minX;
+                RayPath(M:M+N-1,2) = gpath{i}(1,:)*delta_X;
+            end
+        end
+
+        [y,x] = size(W2);
+        RayDen0 = zeros(y,x);
+        
+        MinX = min(RayPath(:,1))-delta_X;
+        MinY = min(RayPath(:,2))-delta_X;
+        
+        for i = 1:length(RayPath)
+            tmp_x = round((RayPath(i,1)-MinX)/delta_X);
+            tmp_y = round((RayPath(i,2)-MinY)/delta_X);
+            if tmp_x < x && tmp_y < y
+                RayDen0(tmp_y,tmp_x) = RayDen0(tmp_y,tmp_x)+1;
+            end
+        end
+        
+        Ray(cnt).model = RayDen0; % raypath density of a model
         
         cnt=cnt+1;
     end
