@@ -7,6 +7,7 @@ Second, the method calculates the posterior probability given estimated travel t
 This tutorial provides an overview of the THB MCMC algorithm, detailed explanation of the model parameters and setup, execution of the program with an example, and figures produced by the program. 
 
 How to cite this program:
+
 Huang, M.-H., Hudson-Rasmussen, B., Burdick, S., Lekic, V., Nelson, M. D., Fauria, K. E., & Schmerr, N. (2021). Bayesian seismic refraction inversion for critical zone science and near-surface applications. Geochemistry, Geophysics, Geosystems, 22, e2020GC009172. https://doi.org/10.1029/2020GC009172
 
 References:
